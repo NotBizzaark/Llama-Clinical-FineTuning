@@ -20,16 +20,10 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 model_name = "meta-llama/Llama-3.1-8B"
 tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-# model = AutoModelForCausalLM.from_pretrained(
-#     model_name,
-#     device_map="auto",
-#     load_in_4bit=True,  # for efficient finetuning
-# )
-
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     device_map="auto",
-    torch_dtype=torch.float16  # or torch.float32 if needed
+    load_in_4bit=True,  # for efficient finetuning
 )
 
 
@@ -49,7 +43,7 @@ model = get_peft_model(model, lora_config)
 
 
 # -----------------------------------------------------------------
-path = "./data/mimic-iv-note-deidentified-free-text-clinical-notes-2/note/"
+path = "./data/mimic-iv-note-deidentified-free-text-clinical-notes-2/note"
 # train_dataset = trainer.prepare_dataset(data)
 # discharge.csv.gz
 

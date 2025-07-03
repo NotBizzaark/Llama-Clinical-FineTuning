@@ -11,6 +11,11 @@ from datasets import Dataset, load_dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 # -----------------------------------------------------------------
 
+from huggingface_hub import login
+import os
+
+login(token=os.environ["Huggingface_token"])
+# login(new_session=False)
 
 # -----------------------------------------------------------------
 # Load model directly
@@ -43,7 +48,7 @@ model = get_peft_model(model, lora_config)
 
 
 # -----------------------------------------------------------------
-path = "./data/mimic-iv-note-deidentified-free-text-clinical-notes-2/note"
+path = "./data/physionet.org/files/mimic-iv-note/2.2/note/"
 # train_dataset = trainer.prepare_dataset(data)
 # discharge.csv.gz
 

@@ -14,7 +14,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from huggingface_hub import login
 import os
 
-login(token=os.environ["Huggingface_token"])
+login(token="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")
 # login(new_session=False)
 
 # -----------------------------------------------------------------
@@ -23,12 +23,12 @@ login(token=os.environ["Huggingface_token"])
 # tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B")
 # model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.1-8B")
 
-model_name = "meta-llama/Llama-3.1-8B"
+model_name = "meta-llama/Llama-3.2-1B"
 tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     device_map="auto",
-    load_in_4bit=True,  # for efficient finetuning
+    load_in_4bit=True,
 )
 
 
@@ -48,26 +48,39 @@ model = get_peft_model(model, lora_config)
 
 
 # -----------------------------------------------------------------
-path = "./data/physionet.org/files/mimic-iv-note/2.2/note/"
+path = "/home/faakash/code/data/physionet.org/files/mimic-iv-note/2.2/note/"
 # train_dataset = trainer.prepare_dataset(data)
 # discharge.csv.gz
+import pandas as pd
+discharge_df = pd.read_csv(path+"discharge.csv.gz", compression="gzip", nrows=86000)
 
-discharge = load_dataset("csv", data_files=path+"discharge.csv.gz", split="train[:5%]")
-radiology = load_dataset("csv", data_files=path+"radiology.csv.gz", split="train[:5%]")
+def split_keyword(text, keyword="instructions:"):
+	if keyword in text:
+		parts = text.split(keyword, maxsplit=1)
+		input_text = parts[0].strip()
+		target_text = parts[1].strip()
+		return pd.Series([input_text, target_text])
+	else:
+		return pd.Series([text.strip(), ""])
 
-from datasets import Value
-discharge = discharge.cast_column("hadm_id", Value("int64"))
-radiology = radiology.cast_column("hadm_id", Value("int64"))
+discharge_df[["input", "target"]] = discharge_df["text"].apply(lambda x: split_keyword(x, "instructions:"))
 
-from datasets import concatenate_datasets
-train_dataset = concatenate_datasets([discharge, radiology])
+train_dataset = Dataset.from_pandas(discharge_df[["input", "target"]])
+
+#discharge = load_dataset("csv", data_files=path+"discharge.csv.gz", split="train[:4%]")
+#radiology = load_dataset("csv", data_files=path+"radiology.csv.gz", split="train[:4%]")
 
 tokenizer.pad_token = tokenizer.eos_token
 
 def tokenize_function(examples):
-    return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=512)
+	tokenized = tokenizer(examples["input"], truncation=True, padding="max_length")
+	with tokenizer.as_target_tokenizer():
+		labels = tokenizer(examples["target"], truncation=True, padding="max_length")
+	tokenized["labels"] = labels["input_ids"]
+	return tokenized
 
-tokenized_dataset = train_dataset.map(tokenize_function, batched=True, remove_columns=["text"])
+#tokenized_dataset = train_dataset.map(tokenize_function, batched=True, remove_columns=["text"])
+tokenized_dataset = train_dataset.map(tokenize_function, batched=True)
 # -----------------------------------------------------------------
 
 
@@ -75,16 +88,15 @@ tokenized_dataset = train_dataset.map(tokenize_function, batched=True, remove_co
 
 training_args = TrainingArguments(
     output_dir="./output",
-    per_device_train_batch_size=2,
-    gradient_accumulation_steps=8,
+    per_device_train_batch_size=16,
     num_train_epochs=3,
-    logging_steps=50,
+    logging_steps=20,
     save_steps=500,
     save_total_limit=2,
     learning_rate=2e-4,
     warmup_steps=100,
     fp16=True,
-    optim="paged_adamw_32bit"
+    optim="paged_adamw_8bit"
 )
 
 trainer = Trainer(
@@ -99,8 +111,8 @@ trainer = Trainer(
 # -----------------------------------------------------------------
 trainer.train()
 
-trainer.save_model("./llama3-multi-finetuned")
-tokenizer.save_pretrained("./llama3-multi-finetuned")
+trainer.save_model("./model/llama-finetuned")
+tokenizer.save_pretrained("./model/llama-finetuned")
 # -----------------------------------------------------------------
 
 # -----------------------------------------------------------------

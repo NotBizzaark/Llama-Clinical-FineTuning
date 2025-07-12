@@ -52,9 +52,9 @@ path = "/home/faakash/code/data/physionet.org/files/mimic-iv-note/2.2/note/"
 # train_dataset = trainer.prepare_dataset(data)
 # discharge.csv.gz
 import pandas as pd
-discharge_df = pd.read_csv(path+"discharge.csv.gz", compression="gzip", nrows=86000)
+discharge_df = pd.read_csv(path+"discharge.csv.gz", compression="gzip", nrows=100000)
 
-def split_keyword(text, keyword="instructions:"):
+def split_keyword(text, keyword="Instructions:"):
 	if keyword in text:
 		parts = text.split(keyword, maxsplit=1)
 		input_text = parts[0].strip()
@@ -63,7 +63,7 @@ def split_keyword(text, keyword="instructions:"):
 	else:
 		return pd.Series([text.strip(), ""])
 
-discharge_df[["input", "target"]] = discharge_df["text"].apply(lambda x: split_keyword(x, "instructions:"))
+discharge_df[["input", "target"]] = discharge_df["text"].apply(lambda x: split_keyword(x, "Instructions:"))
 
 train_dataset = Dataset.from_pandas(discharge_df[["input", "target"]])
 
@@ -73,9 +73,9 @@ train_dataset = Dataset.from_pandas(discharge_df[["input", "target"]])
 tokenizer.pad_token = tokenizer.eos_token
 
 def tokenize_function(examples):
-	tokenized = tokenizer(examples["input"], truncation=True, padding="max_length")
+	tokenized = tokenizer(examples["input"], truncation=True, padding="max_length", max_length=1024)
 	with tokenizer.as_target_tokenizer():
-		labels = tokenizer(examples["target"], truncation=True, padding="max_length")
+		labels = tokenizer(examples["target"], truncation=True, padding="max_length", max_length=1024)
 	tokenized["labels"] = labels["input_ids"]
 	return tokenized
 
@@ -83,12 +83,13 @@ def tokenize_function(examples):
 tokenized_dataset = train_dataset.map(tokenize_function, batched=True)
 # -----------------------------------------------------------------
 
+torch.cuda.empty_cache()
 
 # -----------------------------------------------------------------
 
 training_args = TrainingArguments(
     output_dir="./output",
-    per_device_train_batch_size=16,
+    per_device_train_batch_size=8,
     num_train_epochs=3,
     logging_steps=20,
     save_steps=500,
@@ -111,8 +112,8 @@ trainer = Trainer(
 # -----------------------------------------------------------------
 trainer.train()
 
-trainer.save_model("./model/llama-finetuned")
-tokenizer.save_pretrained("./model/llama-finetuned")
+trainer.save_model("./model/llama-finetuned_v2")
+tokenizer.save_pretrained("./model/llama-finetuned_v2")
 # -----------------------------------------------------------------
 
 # -----------------------------------------------------------------

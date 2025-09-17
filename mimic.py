@@ -14,7 +14,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from huggingface_hub import login
 import os
 
-login(token="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")
+login(token="") #put your huggingface-token here
 # login(new_session=False)
 
 # -----------------------------------------------------------------
